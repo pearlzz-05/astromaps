@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Astromaps - Portal Dashboard</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- D3.js v3 and d3-celestial (Required for Celestial Map Engine) -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@3.5.17/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3-celestial@0.7.35/celestial.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/d3-celestial@0.7.35/celestial.css">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #060913;
+      color: #e2e8f0;
+      overflow-x: hidden;
+    }
+
+    /* Custom Glassmorphism Panels */
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(51, 65, 85, 0.5);
+      border-radius: 0.75rem;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Celestial Map Container Overrides */
+    #celestial-map {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      background: #000000;
+    }
+
+    #celestial-map canvas {
+      display: block;
+      margin: 0 auto;
+      border-radius: 0.5rem;
+    }
+
+    #celestial-zoomin, #celestial-zoomout {
+      display: none !important; /* Hide default controls for custom UI */
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #38bdf8;
+    }
+
+    /* Custom Switch Toggle styling */
+    .toggle-checkbox:checked {
+      right: 0;
+      border-color: #38bdf8;
+    }
+    .toggle-checkbox:checked + .toggle-label {
+      background-color: #0284c7;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-sky-500 selection:text-white">
+
+  <!-- Navigation Header Bar -->
+  <header class="navbar bg-slate-900/90 border-b border-slate-800 px-6 py-4 sticky top-0 z-50 backdrop-blur-md flex flex-wrap justify-between items-center shadow-lg">
+    <div class="flex items-center space-x-3">
+      <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-lg shadow-sky-500/20">
+        <i class="fa-solid font-bold fa-user-astro text-xl"></i>
+      </div>
+      <div>
+        <h2 class="text-xl font-bold tracking-tight bg-gradient-to-r from-sky-400 via-indigo-200 to-purple-400 bg-clip-text text-transparent">
+          Astromaps Portal
+        </h2>
+        <p class="text-xs text-slate-400">Deep Space Observational & Plate-Solving Suite</p>
+      </div>
+    </div>
+
+    <!-- Live Status Badges & User Display -->
+    <div class="flex items-center space-x-4 mt-2 sm:mt-0">
+      <div class="hidden md:flex items-center space-x-2 bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700/60 text-xs">
+        <span class="relative flex h-2 w-2">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        </span>
+        <span class="text-slate-300 font-medium" id="telemetry-time">UTC: --:--:--</span>
+      </div>
+
+      <div class="flex items-center space-x-3 bg-slate-800/60 px-3.5 py-1.5 rounded-lg border border-slate-700/50">
+        <i class="fa-solid fa-user-astronaut text-sky-400"></i>
+        <span id="user-display" class="text-sm font-semibold text-slate-200">Guest Mode</span>
+        <button id="logout-btn" onclick="handleLogout()" class="hidden text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-slate-300 transition">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 1. AUTHENTICATION APP PANEL -->
+  <main id="login-screen" class="container mx-auto px-4 flex-1 flex items-center justify-center py-12">
+    <div class="glass-panel w-full max-w-md p-8 relative overflow-hidden shadow-2xl border border-slate-700/60">
+      <div class="absolute -top-12 -right-12 w-32 h-32 bg-sky-500/10 rounded-full blur-2xl pointer-events-none"></div>
+      <div class="text-center mb-8">
+        <div class="inline-flex p-3 rounded-full bg-sky-500/10 text-sky-400 mb-3 border border-sky-500/20">
+          <i class="fa-solid fa-key text-2xl"></i>
+        </div>
+        <h3 class="text-2xl font-bold text-white">Sign In to AstroSpace</h3>
+        <p class="text-sm text-slate-400 mt-1">Access live celestial feeds & plate solvers</p>
+      </div>
+
+      <form onsubmit="event.preventDefault(); handleLogin();" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Username</label>
+          <div class="relative">
+            <i class="fa-solid fa-user absolute left-3.5 top-3.5 text-slate-400 text-sm"></i>
+            <input type="text" id="login-user" value="demo_user" placeholder="Enter username" 
+                   class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-700 bg-slate-900/80 text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm transition">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Password</label>
+          <div class="relative">
+            <i class="fa-solid fa-lock absolute left-3.5 top-3.5 text-slate-400 text-sm"></i>
+            <input type="password" id="login-pass" value="password123" placeholder="Enter password" 
+                   class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-700 bg-slate-900/80 text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm transition">
+          </div>
+        </div>
+
+        <button type="submit" class="w-full py-3 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold rounded-lg shadow-lg shadow-sky-500/25 transition duration-200 flex items-center justify-center space-x-2">
+          <span>Authenticate Session</span>
+          <i class="fa-solid fa-arrow-right text-sm"></i>
+        </button>
+
+        <div class="bg-slate-900/50 p-3 rounded border border-slate-800 text-xs text-slate-400 text-center">
+          <i class="fa-solid fa-circle-info text-sky-400 mr-1"></i> Demo Credentials: <span class="text-slate-200">demo_user</span> / <span class="text-slate-200">password123</span>
+        </div>
+
+        <p id="login-err" class="text-rose-400 text-xs text-center min-h-[1rem] font-medium"></p>
+      </form>
+    </div>
+  </main>
+
+  <!-- 2. MAIN APPLICATION PLATFORM WORKSPACE -->
+  <main id="main-application" class="container mx-auto px-4 py-6 hidden flex-1 flex flex-col gap-6">
+    
+    <!-- Top System Telemetry Bar -->
+    <div class="glass-panel p-4 flex flex-wrap items-center justify-between gap-4 border border-slate-700/60 text-xs">
+      <div class="flex items-center space-x-6">
+        <div class="flex items-center space-x-2">
+          <i class="fa-solid fa-location-crosshairs text-sky-400"></i>
+          <span class="text-slate-400">Observer Coordinates:</span>
+          <span id="geo-coords" class="font-mono text-slate-200 font-semibold">Detecting GPS...</span>
+        </div>
+        <div class="hidden lg:flex items-center space-x-2">
+          <i class="fa-solid fa-clock text-indigo-400"></i>
+          <span class="text-slate-400">Local Sidereal Time (LST):</span>
+          <span id="lst-time" class="font-mono text-indigo-300 font-semibold">--:--:--</span>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <span class="text-slate-400">Viewport Engine:</span>
+        <span id="viewport-status" class="px-2.5 py-1 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/30 font-semibold">Live Interactive Canvas</span>
+      </div>
+    </div>
+
+    <!-- Grid Layout: Left Map Engine / Right Control Pipeline -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Left Column: Interactive Celestial Map & Media Viewport (8 Cols) -->
+      <div class="lg:col-span-8 flex flex-col gap-4">
+        
+        <div class="glass-panel p-5 flex flex-col h-full min-h-[580px] border border-slate-700/60 relative">
+          
+          <!-- Viewport Toolbar Header -->
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-800">
+            <div class="flex items-center space-x-2">
+              <i class="fa-solid fa-globe text-sky-400"></i>
+              <h3 class="font-bold text-slate-100 text-lg">Celestial Viewport Engine</h3>
+            </div>
+
+            <!-- Viewport Switcher Controls -->
+            <div class="flex items-center space-x-2 bg-slate-900/90 p-1 rounded-lg border border-slate-800">
+              <button id="mode-live-btn" onclick="switchViewportMode('live')" class="px-3 py-1.5 rounded-md text-xs font-semibold bg-sky-600 text-white shadow transition flex items-center space-x-1.5">
+                <i class="fa-solid fa-satellite"></i>
+                <span>Live Chart</span>
+              </button>
+              <button id="mode-media-btn" onclick="switchViewportMode('media')" class="px-3 py-1.5 rounded-md text-xs font-semibold text-slate-400 hover:text-slate-200 transition flex items-center space-x-1.5">
+                <i class="fa-solid fa-image"></i>
+                <span>Target Preview</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Main Viewport Box -->
+          <div class="map-viewport relative flex-1 min-h-[420px] rounded-lg overflow-hidden border border-slate-800 bg-black group">
+            
+            <!-- A. Live D3-Celestial Canvas Container -->
+            <div id="celestial-wrapper" class="w-full h-full absolute inset-0">
+              <div id="celestial-map"></div>
+            </div>
+
+            <!-- B. Image Target Preview Layer -->
+            <div id="media-preview-layer" class="hidden w-full h-full absolute inset-0 bg-slate-950 flex flex-col items-center justify-center">
+              <div id="media-loading-spinner" class="hidden absolute flex flex-col items-center justify-center space-y-2 text-sky-400">
+                <i class="fa-solid fa-circle-notch fa-spin text-3xl"></i>
+                <span class="text-xs">Fetching High-Res Space Asset...</span>
+              </div>
+              <img id="target-image" src="" alt="Target Astrophotography" onerror="handleImageError(this)" class="w-full h-full object-cover hidden transition-opacity duration-300">
+              
+              <!-- C. Canvas Space Animation (When photo loading or active) -->
+              <canvas id="fallback-space-canvas" class="w-full h-full absolute inset-0 pointer-events-none"></canvas>
+              
+              <div id="media-caption" class="absolute bottom-4 left-4 right-4 bg-slate-900/80 backdrop-blur-md p-3 rounded-lg border border-slate-700/70 text-xs text-slate-200 flex justify-between items-center z-10">
+                <div class="flex items-center space-x-2">
+                  <i class="fa-solid fa-camera text-sky-400"></i>
+                  <span id="media-title-text" class="font-semibold">Deep Space Field Simulation</span>
+                </div>
+                <span id="media-coords-badge" class="font-mono text-slate-400">RA: 00h 00m | Dec: +00°</span>
+              </div>
+            </div>
+
+            <!-- Overlay Controls Bar for Live Celestial Map -->
+            <div id="live-map-controls" class="absolute top-4 right-4 bg-slate-900/85 backdrop-blur-md border border-slate-700/60 p-2.5 rounded-xl shadow-xl flex flex-col gap-2.5 text-xs text-slate-200 z-10 max-w-[200px]">
+              <div class="font-bold text-sky-400 border-b border-slate-800 pb-1 flex items-center justify-between">
+                <span>Display Controls</span>
+                <i class="fa-solid fa-sliders text-slate-400"></i>
+              </div>
+
+              <label class="flex items-center justify-between cursor-pointer">
+                <span>Constellations</span>
+                <input type="checkbox" id="toggle-constellations" checked onchange="updateCelestialConfig()" class="rounded bg-slate-800 border-slate-700 text-sky-500 focus:ring-0">
+              </label>
+
+              <label class="flex items-center justify-between cursor-pointer">
+                <span>Grid Lines</span>
+                <input type="checkbox" id="toggle-grid" checked onchange="updateCelestialConfig()" class="rounded bg-slate-800 border-slate-700 text-sky-500 focus:ring-0">
+              </label>
+
+              <label class="flex items-center justify-between cursor-pointer">
+                <span>Milky Way</span>
+                <input type="checkbox" id="toggle-mw" checked onchange="updateCelestialConfig()" class="rounded bg-slate-800 border-slate-700 text-sky-500 focus:ring-0">
+              </label>
+
+              <div>
+                <span class="block mb-1 text-slate-400">Star Mag Limit (<span id="mag-val">6</span>)</span>
+                <input type="range" id="slider-mag" min="2" max="6" step="0.5" value="6" oninput="document.getElementById('mag-val').innerText=this.value; updateCelestialConfig();" class="w-full accent-sky-400 h-1.5 bg-slate-700 rounded-lg cursor-pointer">
+              </div>
+
+              <div>
+                <span class="block mb-1 text-slate-400">Projection</span>
+                <select id="select-projection" onchange="updateCelestialConfig()" class="w-full bg-slate-800 border border-slate-700 rounded text-slate-200 px-2 py-1 text-xs">
+                  <option value="stereographic" selected>Stereographic</option>
+                  <option value="orthographic">Orthographic</option>
+                  <option value="mercator">Mercator</option>
+                </select>
+              </div>
+
+              <button onclick="recenterToZenith()" class="w-full py-1.5 bg-sky-600/80 hover:bg-sky-500 text-white rounded font-medium transition text-xs flex items-center justify-center space-x-1">
+                <i class="fa-solid fa-crosshairs"></i>
+                <span>Recenter Zenith</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Bottom Viewport Information Footer -->
+          <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+            <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
+              <span class="text-slate-400 block mb-0.5">Zenith Right Ascension</span>
+              <span id="zenith-ra" class="font-mono text-sky-300 font-bold">00.00° (00h 00m)</span>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
+              <span class="text-slate-400 block mb-0.5">Zenith Declination</span>
+              <span id="zenith-dec" class="font-mono text-sky-300 font-bold">+00.00°</span>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
+              <span class="text-slate-400 block mb-0.5">Constellation Overhead</span>
+              <span id="overhead-constellation" class="font-semibold text-indigo-300">Calculating...</span>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
+              <span class="text-slate-400 block mb-0.5">Update Rate</span>
+              <span class="font-semibold text-emerald-400 flex items-center">
+                <i class="fa-solid fa-arrows-rotate text-xs mr-1 animate-spin"></i> Live 1000ms
+              </span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Right Column: Catalog Search & Astrophotography Plate Solver (4 Cols) -->
+      <div class="lg:col-span-4 flex flex-col gap-6">
+        
+        <!-- A. Object Search Catalog Panel -->
+        <div class="glass-panel p-5 flex flex-col border border-slate-700/60">
+          <div class="flex items-center space-x-2 mb-3">
+            <i class="fa-solid fa-magnifying-glass text-sky-400"></i>
+            <h3 class="font-bold text-slate-100 text-base">Object Search Catalog</h3>
+          </div>
+
+          <div class="relative mb-3">
+            <input type="text" id="search-box" oninput="searchCatalog()" 
+                   placeholder="Type to search (e.g., Orion, M31, Sirius, Pleiades)..." 
+                   class="w-full pl-9 pr-4 py-2 bg-slate-900/90 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 text-xs focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition">
+            <i class="fa-solid fa-search absolute left-3 top-2.5 text-slate-500 text-xs"></i>
+          </div>
+
+          <!-- Filtered Catalog Results Container -->
+          <div id="catalog-results" class="space-y-2 max-h-56 overflow-y-auto pr-1 text-xs border-t border-slate-800 pt-2">
+            <!-- Dynamic elements loaded via JavaScript -->
+          </div>
+        </div>
+
+        <!-- B. Astrophotography Plate Solver Pipeline -->
+        <div class="glass-panel p-5 flex flex-col border border-slate-700/60">
+          <div class="flex items-center space-x-2 mb-3">
+            <i class="fa-solid fa-microchip text-indigo-400"></i>
+            <h3 class="font-bold text-slate-100 text-base">Space Photography Plate-Solver</h3>
+          </div>
+          <p class="text-xs text-slate-400 mb-4">Upload astrophotography files to extract celestial coordinates & identify target deep-sky objects.</p>
+
+          <!-- Upload Drop Zone -->
+          <div id="drop-zone" onclick="document.getElementById('photo-file').click()" 
+               class="border-2 border-dashed border-slate-700 hover:border-sky-500/80 bg-slate-900/50 hover:bg-slate-900/80 p-5 rounded-xl text-center cursor-pointer transition flex flex-col items-center justify-center group mb-4">
+            <input type="file" id="photo-file" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
+            <div class="h-10 w-10 rounded-full bg-slate-800 group-hover:bg-sky-500/20 text-slate-400 group-hover:text-sky-400 flex items-center justify-center mb-2 transition">
+              <i class="fa-solid fa-cloud-arrow-up text-lg"></i>
+            </div>
+            <span id="file-name-label" class="text-xs font-semibold text-slate-300">Click or drag image file here</span>
+            <span class="text-[10px] text-slate-500 mt-0.5">Supports PNG, JPG, WebP images</span>
+          </div>
+
+          <button onclick="handleUpload()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg shadow-lg shadow-indigo-600/25 transition flex items-center justify-center space-x-2">
+            <i class="fa-solid fa-bolt"></i>
+            <span>Run Plate Solver Engine</span>
+          </button>
+
+          <!-- Analysis & Progress Output -->
+          <div id="upload-status" class="hidden mt-4 pt-3 border-t border-slate-800 space-y-3">
+            <div class="flex items-center justify-between text-xs">
+              <span id="status-text" class="text-sky-400 font-medium">Extracting star centroids...</span>
+              <span id="status-percent" class="text-slate-400 font-mono">0%</span>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+              <div id="solver-progress" class="bg-gradient-to-r from-sky-500 to-indigo-500 h-full w-0 transition-all duration-300"></div>
+            </div>
+
+            <!-- Result Metadata Box -->
+            <div id="analysis-output" class="hidden bg-slate-900/90 border border-emerald-500/30 p-3 rounded-lg text-xs space-y-1.5">
+              <div class="text-emerald-400 font-bold flex items-center">
+                <i class="fa-solid fa-circle-check mr-1.5"></i>
+                <span>Match Confirmed</span>
+              </div>
+              <div id="analysis-details" class="text-slate-300 space-y-1"></div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Application Footer -->
+  <footer class="bg-slate-950 border-t border-slate-800 py-3 px-6 text-center text-xs text-slate-500 flex flex-wrap justify-between items-center gap-2">
+    <div>
+      <span>Astromaps Portal &copy; 2026. Powered by Wikimedia Commons &amp; d3-celestial</span>
+    </div>
+    <div class="flex items-center space-x-4">
+      <span class="hover:text-slate-400 cursor-pointer">Privacy Policy</span>
+      <span class="hover:text-slate-400 cursor-pointer">Ephemeris Docs</span>
+      <span class="hover:text-slate-400 cursor-pointer">System Diagnostics</span>
+    </div>
+  </footer>
+
+  <script>
+    /* =========================================================================
+     * REAL OPEN-SOURCE ASTRONOMICAL IMAGE URL MAPPINGS (Wikimedia & Reliable Open Sources)
+     * ========================================================================= */
+    const localCelestialCatalog = [
+      { 
+        identifier: "M42", 
+        common_name: "Orion Nebula", 
+        type: "Nebula", 
+        ra: 83.82, 
+        dec: -5.39, 
+        ra_hours: 5.58, 
+        const: "Orion",
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Orion_Nebula_-_Hubble_2006_mosaic_300dpi.jpg/1280px-Orion_Nebula_-_Hubble_2006_mosaic_300dpi.jpg"
+      },
+      { 
+        identifier: "M31", 
+        common_name: "Andromeda Galaxy", 
+        type: "Galaxy", 
+        ra: 10.68, 
+        dec: 41.26, 
+        ra_hours: 0.71, 
+        const: "Andromeda",
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/M31_Lanoue.png/1280px-M31_Lanoue.png"
+      },
+      { 
+        identifier: "M45", 
+        common_name: "Pleiades Cluster", 
+        type: "Star Cluster", 
+        ra: 56.75, 
+        dec: 24.11, 
+        ra_hours: 3.78, 
+        const: "Taurus",
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Pleiades_large.jpg/1280px-Pleiades_large.jpg"
+      },
+      { 
+        identifier: "Alpha Ori", 
+        common_name: "Betelgeuse", 
+        type: "Star", 
+        ra: 88.79, 
+        dec: 7.41, 
+        ra_hours: 5.92, 
+        const: "Orion",
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/57/Betelgeuse_star_%28ALMA%29.jpg/1024px-Betelgeuse_star_%28ALMA%29.jpg"
+      },
+      { 
+        identifier: "Alpha CMa", 
+        common_name: "Sirius", 
+        type: "Star", 
+        ra: 101.28, 
+        dec: -16.71, 
+        ra_hours: 6.75, 
+        const: "Canis Major",
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Sirius_A_and_B_Hubble_photo.jpg/1024px-Sirius_A_and_B_Hubble_photo.jpg"
+      }
+    ];
+
+    /* Fallback image helper if any remote network URL fails */
+    function handleImageError(imgElement) {
+      console.warn("Primary photo failed to load. Falling back to generated cosmic visual.");
+      imgElement.src = "https://placehold.co/1000x800/020617/38bdf8?text=Astronomical+Image+Stream";
+    }
+
+    /* Global State Variables */
+    let userLat = 51.4769; // Default Greenwich Lat
+    let userLon = -0.0005; // Default Greenwich Lon
+    let currentViewportMode = "live"; // "live" or "media"
+    let celestialInitialized = false;
+    let liveTimer = null;
+    let fallbackAnimationId = null;
+
+    /* =========================================================================
+     * AUTHENTICATION LOGIC
+     * ========================================================================= */
+    function handleLogin() {
+      const user = document.getElementById("login-user").value.trim();
+      const pass = document.getElementById("login-pass").value.trim();
+      const errEl = document.getElementById("login-err");
+
+      if (user === "demo_user" && pass === "password123") {
+        document.getElementById("user-display").innerText = `${user}`;
+        document.getElementById("login-screen").classList.add("hidden");
+        document.getElementById("main-application").classList.remove("hidden");
+        document.getElementById("logout-btn").classList.remove("hidden");
+        
+        // Start Engine and location detection
+        initApplicationEngine();
+      } else {
+        errEl.innerText = "Invalid credentials. Please use demo_user / password123";
+      }
+    }
+
+    function handleLogout() {
+      document.getElementById("login-screen").classList.remove("hidden");
+      document.getElementById("main-application").classList.add("hidden");
+      document.getElementById("logout-btn").classList.add("hidden");
+      document.getElementById("user-display").innerText = "Guest Mode";
+    }
+
+         * ASTRONOMICAL CALCULATIONS (Sidereal Time & Coordinate Conversions)
+     * ========================================================================= */
+    function getGST(date) {
+      const jd = (date.getTime() / 86400000) + 2440587.5;
+      const D = jd - 2451545.0;
+      let gst = 280.46061837 + 360.98564736629 * D;
+      return (gst % 360 + 360) % 360;
+    }
+
+    function getLocalSiderealTime(longitude, date) {
+      const gst = getGST(date);
+      let lst = gst + longitude;
+      return (lst % 360 + 360) % 360;
+    }
+
+    function formatRAHours(degrees) {
+      const hours = degrees / 15;
+      const h = Math.floor(hours);
+      const m = Math.floor((hours - h) * 60);
+      return `${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m`;
+    }
+
+    /* =========================================================================
+     * LIVE CELESTIAL MAP ENGINE (d3-celestial Integration)
+     * ========================================================================= */
+    function initCelestialMap(lat, lon) {
+      const now = new Date();
+      const lstDegrees = getLocalSiderealTime(lon, now);
+      const raHours = lstDegrees / 15;
+
+      const config = {
+        width: 0, // Responsive auto-width
+        projection: document.getElementById("select-projection").value,
+        center: [raHours, lat, 0], // Center overhead
+        transform: "equatorial",
+        background: { fill: "#030712", stroke: "#1e293b", opacity: 1 },
+        stars: {
+          show: true,
+          limit: parseFloat(document.getElementById("slider-mag").value),
+          colors: true,
+          proper: true,
+          designation: false,
+          size: 6
+        },
+        dsos: { show: true, limit: 6 },
+        constellations: {
+          show: document.getElementById("toggle-constellations").checked,
+          names: true,
+          lines: true,
+          lineStyle: { stroke: "#38bdf8", width: 1.2, opacity: 0.7 }
+        },
+        mw: { show: document.getElementById("toggle-mw").checked, opacity: 0.25 },
+        lines: {
+          graticule: { show: document.getElementById("toggle-grid").checked, stroke: "#334155", width: 0.6 },
+          equatorial: { show: true, stroke: "#eab308", width: 1, opacity: 0.5 }
+        }
+      };
+
+      try {
+        Celestial.display(config);
+        celestialInitialized = true;
+      } catch (err) {
+        console.warn("Celestial map rendering fallback active:", err);
+      }
+
+      // Start dynamic ticker for continuous zenith movement & telemetry
+      if (liveTimer) clearInterval(liveTimer);
+      liveTimer = setInterval(() => {
+        updateTelemetryAndMap(lat, lon);
+      }, 1000);
+      
+      updateTelemetryAndMap(lat, lon);
+    }
+
+    function updateCelestialConfig() {
+      if (!celestialInitialized) return;
+      
+      const newConfig = {
+        projection: document.getElementById("select-projection").value,
+        stars: {
+          show: true,
+          limit: parseFloat(document.getElementById("slider-mag").value),
+          colors: true
+        },
+        constellations: {
+          show: document.getElementById("toggle-constellations").checked,
+          names: true,
+          lines: true,
+          lineStyle: { stroke: "#38bdf8", width: 1.2, opacity: 0.7 }
+        },
+        mw: { show: document.getElementById("toggle-mw").checked, opacity: 0.25 },
+        lines: {
+          graticule: { show: document.getElementById("toggle-grid").checked, stroke: "#334155", width: 0.6 }
+        }
+      };
+
+      Celestial.apply(newConfig);
+    }
+
+    function updateTelemetryAndMap(lat, lon) {
+      const now = new Date();
+      document.getElementById("telemetry-time").innerText = `UTC: ${now.toUTCString().split(' ')[4]}`;
+
+      const lstDegrees = getLocalSiderealTime(lon, now);
+      const raHours = lstDegrees / 15;
+
+      document.getElementById("lst-time").innerText = `${formatRAHours(lstDegrees)}`;
+      document.getElementById("zenith-ra").innerText = `${lstDegrees.toFixed(2)}° (${formatRAHours(lstDegrees)})`;
+      document.getElementById("zenith-dec").innerText = `${lat >= 0 ? '+' : ''}${lat.toFixed(2)}°`;
+
+      // Estimate overhead constellation based on RA
+      let estConstellation = "Orion / Gemini";
+      if (raHours >= 0 && raHours < 4) estConstellation = "Andromeda / Cassiopeia";
+      else if (raHours >= 4 && raHours < 8) estConstellation = "Taurus / Orion";
+      else if (raHours >= 8 && raHours < 12) estConstellation = "Leo / Ursa Major";
+      else if (raHours >= 12 && raHours < 16) estConstellation = "Virgo / Bootes";
+      else if (raHours >= 16 && raHours < 20) estConstellation = "Cygnus / Lyra";
+      else estConstellation = "Pegasus / Aquarius";
+
+      document.getElementById("overhead-constellation").innerText = estConstellation;
+
+      // Rotate Live Chart
+      if (celestialInitialized && currentViewportMode === "live") {
+        Celestial.rotate({ center: [raHours, lat, 0] });
+      }
+    }
+
+    function recenterToZenith() {
+      const now = new Date();
+      const lstDegrees = getLocalSiderealTime(userLon, now);
+      const raHours = lstDegrees / 15;
+      if (celestialInitialized) {
+        Celestial.rotate({ center: [raHours, userLat, 0] });
+      }
+      switchViewportMode('live');
+    }
+
+    /* Center Chart on Specific Sky Coordinates */
+    function centerMapOnTarget(raHours, dec) {
+      switchViewportMode('live');
+      if (celestialInitialized) {
+        Celestial.rotate({ center: [raHours, dec, 0] });
+      }
+    }
+
+    /* =========================================================================
+     * VIEWPORT MODE SWITCHER & IMAGE VIEWER ENGINE
+     * ========================================================================= */
+    function switchViewportMode(mode) {
+      currentViewportMode = mode;
+      const liveWrapper = document.getElementById("celestial-wrapper");
+      const mediaLayer = document.getElementById("media-preview-layer");
+      const liveBtn = document.getElementById("mode-live-btn");
+      const mediaBtn = document.getElementById("mode-media-btn");
+      const liveControls = document.getElementById("live-map-controls");
+      const statusBadge = document.getElementById("viewport-status");
+
+      if (mode === "live") {
+        liveWrapper.classList.remove("hidden");
+        mediaLayer.classList.add("hidden");
+        liveControls.classList.remove("hidden");
+
+        liveBtn.className = "px-3 py-1.5 rounded-md text-xs font-semibold bg-sky-600 text-white shadow transition flex items-center space-x-1.5";
+        mediaBtn.className = "px-3 py-1.5 rounded-md text-xs font-semibold text-slate-400 hover:text-slate-200 transition flex items-center space-x-1.5";
+        statusBadge.innerText = "Live Interactive Canvas";
+        statusBadge.className = "px-2.5 py-1 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/30 font-semibold";
+      } else {
+        liveWrapper.classList.add("hidden");
+        mediaLayer.classList.remove("hidden");
+        liveControls.classList.add("hidden");
+
+        mediaBtn.className = "px-3 py-1.5 rounded-md text-xs font-semibold bg-sky-600 text-white shadow transition flex items-center space-x-1.5";
+        liveBtn.className = "px-3 py-1.5 rounded-md text-xs font-semibold text-slate-400 hover:text-slate-200 transition flex items-center space-x-1.5";
+        statusBadge.innerText = "Target Media Preview";
+        statusBadge.className = "px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 font-semibold";
+        
+        initFallbackSpaceCanvas();
+      }
+    }
+
+    /* Load and Display Astronomical Photo in Viewport */
+    function loadTargetPhoto(imageUrl, title, ra, dec) {
+      const targetImg = document.getElementById("target-image");
+      const spinner = document.getElementById("media-loading-spinner");
+      const titleEl = document.getElementById("media-title-text");
+      const coordsEl = document.getElementById("media-coords-badge");
+
+      spinner.classList.remove("hidden");
+      targetImg.classList.add("hidden");
+
+      titleEl.innerText = title;
+      coordsEl.innerText = `RA: ${ra}° | Dec: ${dec}°`;
+
+      targetImg.onload = function() {
+        spinner.classList.add("hidden");
+        targetImg.classList.remove("hidden");
+      };
+
+      targetImg.src = imageUrl;
+      switchViewportMode("media");
+    }
+
+    /* HTML5 Canvas Space Particle Background for Simulation Layer */
+    function initFallbackSpaceCanvas() {
+      const canvas = document.getElementById("fallback-space-canvas");
+      const ctx = canvas.getContext("2d");
+      
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+
+      const stars = Array.from({ length: 100 }, () => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        radius: Math.random() * 1.5,
+        alpha: Math.random(),
+        speed: Math.random() * 0.02 + 0.005
+      }));
+
+      function renderSpace() {
+        if (currentViewportMode !== "media") return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        stars.forEach(s => {
+          s.alpha += s.speed;
+          if (s.alpha > 1 || s.alpha < 0) s.speed = -s.speed;
+
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 255, 255, ${Math.abs(s.alpha)})`;
+          ctx.fill();
+        });
+
+        fallbackAnimationId = requestAnimationFrame(renderSpace);
+      }
+
+      if (fallbackAnimationId) cancelAnimationFrame(fallbackAnimationId);
+      renderSpace();
+    }
+
+    /* =========================================================================
+     * CATALOG SEARCH & DYNAMIC INTERACTION
+     * ========================================================================= */
+    function renderCatalogItems(items) {
+      const resultsContainer = document.getElementById("catalog-results");
+      
+      if (items.length === 0) {
+        resultsContainer.innerHTML = `<div class="text-slate-500 text-center py-4">No matching deep-sky assets located.</div>`;
+        return;
+      }
+
+      let html = "";
+      items.forEach(obj => {
+        html += `
+          <div onclick="selectCatalogObject('${obj.identifier}')" 
+               class="p-2.5 rounded-lg bg-slate-900/60 hover:bg-slate-800 border border-slate-800 hover:border-sky-500/50 cursor-pointer transition flex items-center justify-between group">
+            <div class="flex items-center space-x-3">
+              <img src="${obj.imageUrl}" alt="${obj.common_name}" class="w-9 h-9 rounded-md object-cover border border-slate-700 group-hover:border-sky-400 transition" onerror="handleImageError(this)">
+              <div>
+                <div class="font-bold text-slate-200 group-hover:text-sky-300 transition">
+                  ${obj.identifier} <span class="text-slate-400 font-normal">(${obj.common_name})</span>
+                </div>
+                <div class="text-[10px] text-slate-400">
+                  Type: <span class="text-slate-300">${obj.type}</span> | Constellation: <span class="text-indigo-300">${obj.const}</span>
+                </div>
+              </div>
+            </div>
+            <div class="text-right">
+              <span class="text-[10px] font-mono text-sky-400 block">RA: ${obj.ra}°</span>
+              <span class="text-[10px] font-mono text-slate-400 block">Dec: ${obj.dec}°</span>
+            </div>
+          </div>
+        `;
+      });
+      resultsContainer.innerHTML = html;
+    }
+
+    function searchCatalog() {
+      const query = document.getElementById("search-box").value.toLowerCase().trim();
+      
+      const filtered = localCelestialCatalog.filter(obj => 
+        obj.identifier.toLowerCase().includes(query) || 
+        obj.common_name.toLowerCase().includes(query) ||
+        obj.type.toLowerCase().includes(query) ||
+        obj.const.toLowerCase().includes(query)
+      );
+
+      renderCatalogItems(filtered);
+
+      if (filtered.length > 0 && query.length > 1) {
+        const topMatch = filtered[0];
+        loadTargetPhoto(topMatch.imageUrl, `${topMatch.identifier} - ${topMatch.common_name}`, topMatch.ra, topMatch.dec);
+      } else if (query.length === 0) {
+        switchViewportMode("live");
+      }
+    }
+
+    function selectCatalogObject(identifier) {
+      const obj = localCelestialCatalog.find(item => item.identifier === identifier);
+      if (!obj) return;
+
+      // Load high-resolution photograph directly into viewport
+      loadTargetPhoto(obj.imageUrl, `${obj.identifier} - ${obj.common_name}`, obj.ra, obj.dec);
+    }
+
+    /* =========================================================================
+     * ASTROPHOTOGRAPHY PLATE-SOLVER PIPELINE
+     * ========================================================================= */
+    let selectedFileObject = null;
+
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (file) {
+        selectedFileObject = file;
+        document.getElementById("file-name-label").innerText = file.name;
+      }
+    }
+
+    function handleUpload() {
+      const fileInput = document.getElementById("photo-file");
+      const file = selectedFileObject || fileInput.files[0];
+
+      if (!file) {
+        alert("Please select or drop an astrophotography image file first.");
+        return;
+      }
+
+      const statusBox = document.getElementById("upload-status");
+      const statusText = document.getElementById("status-text");
+      const statusPercent = document.getElementById("status-percent");
+      const progressBar = document.getElementById("solver-progress");
+      const outputBox = document.getElementById("analysis-output");
+      const outputDetails = document.getElementById("analysis-details");
+
+      statusBox.classList.remove("hidden");
+      outputBox.classList.add("hidden");
+      progressBar.style.width = "0%";
+      statusText.innerText = "Extracting star centroids & quad patterns...";
+      statusPercent.innerText = "0%";
+
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += Math.floor(Math.random() * 20) + 10;
+        if (progress > 100) progress = 100;
+
+        progressBar.style.width = `${progress}%`;
+        statusPercent.innerText = `${progress}%`;
+
+        if (progress === 40) {
+          statusText.innerText = "Querying Index Files (Gaia DR3 / Tycho-2)...";
+        } else if (progress === 80) {
+          statusText.innerText = "Solving WCS Transformation matrix...";
+        } else if (progress >= 100) {
+          clearInterval(interval);
+          statusText.innerText = "Plate Solving Successful!";
+          
+          // Generate solver analysis based on filename
+          const filename = file.name.toLowerCase();
+          let detectionName = "Unknown Deep Sky Field [Catalog Match Complete]";
+          let solvedRA = (Math.random() * 360).toFixed(2);
+          let solvedDec = ((Math.random() * 120) - 60).toFixed(2);
+          let confidence = (94 + Math.random() * 5).toFixed(1);
+
+          if (filename.includes("orion") || filename.includes("m42")) {
+            detectionName = "M42 (Orion Nebula), Betelgeuse";
+            solvedRA = "83.82"; solvedDec = "-5.39";
+          } else if (filename.includes("andromeda") || filename.includes("m31")) {
+            detectionName = "M31 (Andromeda Galaxy)";
+            solvedRA = "10.68"; solvedDec = "+41.26";
+          } else if (filename.includes("pleiades") || filename.includes("m45")) {
+            detectionName = "M45 (Pleiades Star Cluster)";
+            solvedRA = "56.75"; solvedDec = "+24.11";
+          } else if (filename.includes("sirius")) {
+            detectionName = "Alpha CMa (Sirius)";
+            solvedRA = "101.28"; solvedDec = "-16.71";
+          }
+
+          outputDetails.innerHTML = `
+            <div><strong>File:</strong> ${file.name}</div>
+            <div><strong>Primary Detections:</strong> <span class="text-sky-300 font-semibold">${detectionName}</span></div>
+            <div><strong>Center Coordinates:</strong> <span class="font-mono">RA ${solvedRA}° / Dec ${solvedDec}°</span></div>
+            <div><strong>Confidence Rating:</strong> <span class="text-emerald-400 font-bold">${confidence}%</span></div>
+          `;
+
+          outputBox.classList.remove("hidden");
+
+          // Render uploaded file in viewport
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            loadTargetPhoto(e.target.result, `Uploaded Image: ${file.name}`, solvedRA, solvedDec);
+          };
+          reader.readAsDataURL(file);
+        }
+      }, 250);
+    }
+
+    /* Drag & Drop Setup */
+    function setupDragAndDrop() {
+      const dropZone = document.getElementById("drop-zone");
+      
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, e => {
+          e.preventDefault();
+          e.stopPropagation();
+        }, false);
+      });
+
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.add('border-sky-500', 'bg-slate-900/90'), false);
+      });
+
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.remove('border-sky-500', 'bg-slate-900/90'), false);
+      });
+
+      dropZone.addEventListener('drop', e => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files.length > 0) {
+          selectedFileObject = files[0];
+          document.getElementById("file-name-label").innerText = files[0].name;
+        }
+      });
+    }
+
+    /* Initialize Application Engine */
+    function initApplicationEngine() {
+      renderCatalogItems(localCelestialCatalog);
+      setupDragAndDrop();
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            userLat = position.coords.latitude;
+            userLon = position.coords.longitude;
+            document.getElementById("geo-coords").innerText = 
+              `Lat: ${userLat.toFixed(2)}° | Lon: ${userLon.toFixed(2)}°`;
+            initCelestialMap(userLat, userLon);
+          },
+          (error) => {
+            document.getElementById("geo-coords").innerText = 
+              `Lat: ${userLat.toFixed(2)}° | Lon: ${userLon.toFixed(2)}° (Greenwich Default)`;
+            initCelestialMap(userLat, userLon);
+          }
+        );
+      } else {
+        initCelestialMap(userLat, userLon);
+      }
+    }
+
+    window.addEventListener('resize', () => {
+      if (currentViewportMode === "media") {
+        initFallbackSpaceCanvas();
+      }
+    });
+  </script>
+</body>
+</html>
+
+

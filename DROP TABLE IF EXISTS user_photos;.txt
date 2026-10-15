@@ -1,0 +1,39 @@
+DROP TABLE IF EXISTS user_photos;
+DROP TABLE IF EXISTS celestial_catalog;
+DROP TABLE IF EXISTS users;
+
+CREATE TABLE users (
+    username VARCHAR(50) PRIMARY KEY,
+    password VARCHAR(50) NOT NULL
+);
+
+CREATE TABLE celestial_catalog (
+    id SERIAL PRIMARY KEY,
+    identifier VARCHAR(20) NOT NULL,
+    common_name VARCHAR(100),
+    type VARCHAR(50),
+    ra DOUBLE PRECISION,
+    dec DOUBLE PRECISION
+);
+
+CREATE TABLE user_photos (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(50),
+    filename VARCHAR(255),
+    status VARCHAR(20),
+    detected_objects VARCHAR(512)
+);
+
+INSERT INTO users (username, password) 
+VALUES ('demo_user', 'password123');
+
+INSERT INTO celestial_catalog (identifier, common_name, type, ra, dec) 
+VALUES ('M42', 'Orion Nebula', 'Nebula', 83.82, -5.39);
+
+INSERT INTO celestial_catalog (identifier, common_name, type, ra, dec) 
+VALUES ('M31', 'Andromeda Galaxy', 'Galaxy', 10.68, 41.26);
+
+INSERT INTO celestial_catalog (identifier, common_name, type, ra, dec) 
+VALUES ('M45', 'Pleiades', 'Star Cluster', 56.75, 24.11);
+
+
