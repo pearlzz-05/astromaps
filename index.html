@@ -121,20 +121,36 @@
   <main id="login-screen" class="container mx-auto px-4 flex-1 flex items-center justify-center py-12">
     <div class="glass-panel w-full max-w-md p-8 relative overflow-hidden shadow-2xl border border-slate-700/60">
       <div class="absolute -top-12 -right-12 w-32 h-32 bg-sky-500/10 rounded-full blur-2xl pointer-events-none"></div>
-      <div class="text-center mb-8">
+      
+      <div class="text-center mb-6">
         <div class="inline-flex p-3 rounded-full bg-sky-500/10 text-sky-400 mb-3 border border-sky-500/20">
           <i class="fa-solid fa-key text-2xl"></i>
         </div>
-        <h3 class="text-2xl font-bold text-white">Sign In to AstroSpace</h3>
+        <h3 id="auth-title" class="text-2xl font-bold text-white">Sign In to AstroSpace</h3>
         <p class="text-sm text-slate-400 mt-1">Access live celestial feeds & plate solvers</p>
       </div>
 
-      <form onsubmit="event.preventDefault(); handleLogin();" class="space-y-4">
-        <div>
-          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Username</label>
+      <!-- Mode Switcher Tabs (Login / Register) -->
+      <div class="flex border-b border-slate-800 mb-6 text-xs font-semibold">
+        <button onclick="setAuthMode('login')" id="tab-login-btn" class="flex-1 pb-2.5 text-sky-400 border-b-2 border-sky-400 transition">Sign In</button>
+        <button onclick="setAuthMode('register')" id="tab-register-btn" class="flex-1 pb-2.5 text-slate-400 border-b-2 border-transparent transition">Create Account</button>
+      </div>
+
+      <form id="auth-form" onsubmit="handleAuthSubmit(event)" class="space-y-4">
+        <div id="username-container" class="hidden">
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Username (No underscores allowed)</label>
           <div class="relative">
             <i class="fa-solid fa-user absolute left-3.5 top-3.5 text-slate-400 text-sm"></i>
-            <input type="text" id="login-user" value="demo_user" placeholder="Enter username" 
+            <input type="text" id="auth-user" placeholder="Enter username" 
+                   class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-700 bg-slate-900/80 text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm transition">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Email Address</label>
+          <div class="relative">
+            <i class="fa-solid fa-envelope absolute left-3.5 top-3.5 text-slate-400 text-sm"></i>
+            <input type="email" id="auth-email" placeholder="Enter email" 
                    class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-700 bg-slate-900/80 text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm transition">
           </div>
         </div>
@@ -143,19 +159,16 @@
           <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Password</label>
           <div class="relative">
             <i class="fa-solid fa-lock absolute left-3.5 top-3.5 text-slate-400 text-sm"></i>
-            <input type="password" id="login-pass" value="password123" placeholder="Enter password" 
+            <input type="password" id="auth-pass" placeholder="Enter password" 
                    class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-700 bg-slate-900/80 text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm transition">
           </div>
+          <p class="text-[10px] text-slate-400 mt-1">Must be &gt;5 chars, include 1 uppercase letter &amp; 1 special character.</p>
         </div>
 
-        <button type="submit" class="w-full py-3 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold rounded-lg shadow-lg shadow-sky-500/25 transition duration-200 flex items-center justify-center space-x-2">
+        <button type="submit" id="auth-submit-btn" class="w-full py-3 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold rounded-lg shadow-lg shadow-sky-500/25 transition duration-200 flex items-center justify-center space-x-2">
           <span>Authenticate Session</span>
           <i class="fa-solid fa-arrow-right text-sm"></i>
         </button>
-
-        <div class="bg-slate-900/50 p-3 rounded border border-slate-800 text-xs text-slate-400 text-center">
-          <i class="fa-solid fa-circle-info text-sky-400 mr-1"></i> Demo Credentials: <span class="text-slate-200">demo_user</span> / <span class="text-slate-200">password123</span>
-        </div>
 
         <p id="login-err" class="text-rose-400 text-xs text-center min-h-[1rem] font-medium"></p>
       </form>
@@ -384,6 +397,30 @@
       </div>
 
     </div>
+
+    <!-- C. Admin User Management Dashboard (Visible for Admin Users) -->
+    <section id="admin-dashboard" class="hidden glass-panel p-6">
+      <h3 class="text-xl font-bold text-white mb-4">
+        <i class="fa-solid fa-shield-halved text-sky-400 mr-2"></i>Admin User Management Dashboard
+      </h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-slate-300">
+          <thead class="bg-slate-800 text-slate-400 uppercase">
+            <tr>
+              <th class="p-3">ID</th>
+              <th class="p-3">Username</th>
+              <th class="p-3">Email</th>
+              <th class="p-3">Role</th>
+              <th class="p-3">Joined</th>
+            </tr>
+          </thead>
+          <tbody id="admin-user-list">
+            <!-- Populated via JavaScript -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
   </main>
 
   <!-- Application Footer -->
@@ -468,37 +505,143 @@
     let celestialInitialized = false;
     let liveTimer = null;
     let fallbackAnimationId = null;
+    let authMode = 'login'; // 'login' or 'register'
 
     /* =========================================================================
-     * AUTHENTICATION LOGIC
+     * AUTHENTICATION LOGIC & VALIDATION
      * ========================================================================= */
-    function handleLogin() {
-      const user = document.getElementById("login-user").value.trim();
-      const pass = document.getElementById("login-pass").value.trim();
+    function setAuthMode(mode) {
+      authMode = mode;
+      const titleEl = document.getElementById("auth-title");
+      const userContainer = document.getElementById("username-container");
+      const submitBtn = document.getElementById("auth-submit-btn");
+      const loginTab = document.getElementById("tab-login-btn");
+      const regTab = document.getElementById("tab-register-btn");
       const errEl = document.getElementById("login-err");
 
-      if (user === "demo_user" && pass === "password123") {
-        document.getElementById("user-display").innerText = `${user}`;
+      errEl.innerText = "";
+      if (mode === 'login') {
+        titleEl.innerText = "Sign In to AstroSpace";
+        userContainer.classList.add("hidden");
+        submitBtn.querySelector("span").innerText = "Authenticate Session";
+        loginTab.className = "flex-1 pb-2.5 text-sky-400 border-b-2 border-sky-400 transition";
+        regTab.className = "flex-1 pb-2.5 text-slate-400 border-b-2 border-transparent transition";
+      } else {
+        titleEl.innerText = "Create AstroSpace Account";
+        userContainer.classList.remove("hidden");
+        submitBtn.querySelector("span").innerText = "Register Account";
+        regTab.className = "flex-1 pb-2.5 text-sky-400 border-b-2 border-sky-400 transition";
+        loginTab.className = "flex-1 pb-2.5 text-slate-400 border-b-2 border-transparent transition";
+      }
+    }
+
+    async function handleAuthSubmit(event) {
+      event.preventDefault();
+      const email = document.getElementById("auth-email").value.trim();
+      const pass = document.getElementById("auth-pass").value.trim();
+      const username = document.getElementById("auth-user").value.trim();
+      const errEl = document.getElementById("login-err");
+      errEl.innerText = "";
+
+      // Client-side validation checks matching backend requirements
+      if (authMode === 'register') {
+        if (!username) {
+          errEl.innerText = "Username is required.";
+          return;
+        }
+        if (username.includes('_')) {
+          errEl.innerText = "Usernames cannot contain underscores (_).";
+          return;
+        }
+        if (pass.length <= 5) {
+          errEl.innerText = "Password must be more than 5 characters long.";
+          return;
+        }
+        if (!/[A-Z]/.test(pass)) {
+          errEl.innerText = "Password must contain at least one capital letter.";
+          return;
+        }
+        if (!/[^A-Za-z0-9]/.test(pass)) {
+          errEl.innerText = "Password must contain at least one unique/special character.";
+          return;
+        }
+      }
+
+      const endpoint = authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
+      const payload = authMode === 'login' ? { email, password: pass } : { username, email, password: pass };
+
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Authentication failed.');
+        }
+
+        // Success: Store token & user data
+        localStorage.setItem('astromaps_token', data.token);
+        localStorage.setItem('astromaps_user', JSON.stringify(data.user));
+
+        document.getElementById("user-display").innerText = data.user.username;
         document.getElementById("login-screen").classList.add("hidden");
         document.getElementById("main-application").classList.remove("hidden");
         document.getElementById("logout-btn").classList.remove("hidden");
-        
-        // Start Engine and location detection
+
+        // If user is admin, load admin dashboard
+        if (data.user.is_admin) {
+          loadAdminDashboard();
+        }
+
         initApplicationEngine();
-      } else {
-        errEl.innerText = "Invalid credentials. Please use demo_user / password123";
+      } catch (err) {
+        errEl.innerText = err.message;
       }
     }
 
     function handleLogout() {
+      localStorage.removeItem('astromaps_token');
+      localStorage.removeItem('astromaps_user');
       document.getElementById("login-screen").classList.remove("hidden");
       document.getElementById("main-application").classList.add("hidden");
+      document.getElementById("admin-dashboard").classList.add("hidden");
       document.getElementById("logout-btn").classList.add("hidden");
       document.getElementById("user-display").innerText = "Guest Mode";
     }
 
-         * ASTRONOMICAL CALCULATIONS (Sidereal Time & Coordinate Conversions)
-     * ========================================================================= */
+    async function loadAdminDashboard() {
+      try {
+        const res = await fetch('/api/admin/users');
+        const users = await res.json();
+        const tbody = document.getElementById('admin-user-list');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '';
+        users.forEach(u => {
+          tbody.innerHTML += `
+            <tr class="border-b border-slate-800">
+              <td class="p-3">${u.id}</td>
+              <td class="p-3 font-semibold text-white">${u.username}</td>
+              <td class="p-3">${u.email}</td>
+              <td class="p-3">
+                <span class="px-2 py-1 rounded ${u.is_admin ? 'bg-emerald-500/20 text-emerald-400' : 'bg-sky-500/20 text-sky-400'}">
+                  ${u.is_admin ? 'Admin' : 'User'}
+                </span>
+              </td>
+              <td class="p-3">${new Date(u.created_at).toLocaleDateString()}</td>
+            </tr>
+          `;
+        });
+        document.getElementById('admin-dashboard').classList.remove('hidden');
+      } catch (err) {
+        console.error("Failed to load admin users:", err);
+      }
+    }
+
+    /* ASTRONOMICAL CALCULATIONS (Sidereal Time & Coordinate Conversions) */
     function getGST(date) {
       const jd = (date.getTime() / 86400000) + 2440587.5;
       const D = jd - 2451545.0;
@@ -562,7 +705,6 @@
         console.warn("Celestial map rendering fallback active:", err);
       }
 
-      // Start dynamic ticker for continuous zenith movement & telemetry
       if (liveTimer) clearInterval(liveTimer);
       liveTimer = setInterval(() => {
         updateTelemetryAndMap(lat, lon);
@@ -607,7 +749,6 @@
       document.getElementById("zenith-ra").innerText = `${lstDegrees.toFixed(2)}° (${formatRAHours(lstDegrees)})`;
       document.getElementById("zenith-dec").innerText = `${lat >= 0 ? '+' : ''}${lat.toFixed(2)}°`;
 
-      // Estimate overhead constellation based on RA
       let estConstellation = "Orion / Gemini";
       if (raHours >= 0 && raHours < 4) estConstellation = "Andromeda / Cassiopeia";
       else if (raHours >= 4 && raHours < 8) estConstellation = "Taurus / Orion";
@@ -618,7 +759,6 @@
 
       document.getElementById("overhead-constellation").innerText = estConstellation;
 
-      // Rotate Live Chart
       if (celestialInitialized && currentViewportMode === "live") {
         Celestial.rotate({ center: [raHours, lat, 0] });
       }
@@ -634,17 +774,6 @@
       switchViewportMode('live');
     }
 
-    /* Center Chart on Specific Sky Coordinates */
-    function centerMapOnTarget(raHours, dec) {
-      switchViewportMode('live');
-      if (celestialInitialized) {
-        Celestial.rotate({ center: [raHours, dec, 0] });
-      }
-    }
-
-    /* =========================================================================
-     * VIEWPORT MODE SWITCHER & IMAGE VIEWER ENGINE
-     * ========================================================================= */
     function switchViewportMode(mode) {
       currentViewportMode = mode;
       const liveWrapper = document.getElementById("celestial-wrapper");
@@ -677,7 +806,6 @@
       }
     }
 
-    /* Load and Display Astronomical Photo in Viewport */
     function loadTargetPhoto(imageUrl, title, ra, dec) {
       const targetImg = document.getElementById("target-image");
       const spinner = document.getElementById("media-loading-spinner");
@@ -699,7 +827,6 @@
       switchViewportMode("media");
     }
 
-    /* HTML5 Canvas Space Particle Background for Simulation Layer */
     function initFallbackSpaceCanvas() {
       const canvas = document.getElementById("fallback-space-canvas");
       const ctx = canvas.getContext("2d");
@@ -736,9 +863,6 @@
       renderSpace();
     }
 
-    /* =========================================================================
-     * CATALOG SEARCH & DYNAMIC INTERACTION
-     * ========================================================================= */
     function renderCatalogItems(items) {
       const resultsContainer = document.getElementById("catalog-results");
       
@@ -796,16 +920,10 @@
     function selectCatalogObject(identifier) {
       const obj = localCelestialCatalog.find(item => item.identifier === identifier);
       if (!obj) return;
-
-      // Load high-resolution photograph directly into viewport
       loadTargetPhoto(obj.imageUrl, `${obj.identifier} - ${obj.common_name}`, obj.ra, obj.dec);
     }
 
-    /* =========================================================================
-     * ASTROPHOTOGRAPHY PLATE-SOLVER PIPELINE
-     * ========================================================================= */
     let selectedFileObject = null;
-
     function handleFileSelect(event) {
       const file = event.target.files[0];
       if (file) {
@@ -844,15 +962,10 @@
         progressBar.style.width = `${progress}%`;
         statusPercent.innerText = `${progress}%`;
 
-        if (progress === 40) {
-          statusText.innerText = "Querying Index Files (Gaia DR3 / Tycho-2)...";
-        } else if (progress === 80) {
-          statusText.innerText = "Solving WCS Transformation matrix...";
-        } else if (progress >= 100) {
+        if (progress >= 100) {
           clearInterval(interval);
           statusText.innerText = "Plate Solving Successful!";
           
-          // Generate solver analysis based on filename
           const filename = file.name.toLowerCase();
           let detectionName = "Unknown Deep Sky Field [Catalog Match Complete]";
           let solvedRA = (Math.random() * 360).toFixed(2);
@@ -882,7 +995,6 @@
 
           outputBox.classList.remove("hidden");
 
-          // Render uploaded file in viewport
           const reader = new FileReader();
           reader.onload = function(e) {
             loadTargetPhoto(e.target.result, `Uploaded Image: ${file.name}`, solvedRA, solvedDec);
@@ -892,25 +1004,20 @@
       }, 250);
     }
 
-    /* Drag & Drop Setup */
     function setupDragAndDrop() {
       const dropZone = document.getElementById("drop-zone");
-      
       ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         dropZone.addEventListener(eventName, e => {
           e.preventDefault();
           e.stopPropagation();
         }, false);
       });
-
       ['dragenter', 'dragover'].forEach(eventName => {
         dropZone.addEventListener(eventName, () => dropZone.classList.add('border-sky-500', 'bg-slate-900/90'), false);
       });
-
       ['dragleave', 'drop'].forEach(eventName => {
         dropZone.addEventListener(eventName, () => dropZone.classList.remove('border-sky-500', 'bg-slate-900/90'), false);
       });
-
       dropZone.addEventListener('drop', e => {
         const dt = e.dataTransfer;
         const files = dt.files;
@@ -921,7 +1028,6 @@
       });
     }
 
-    /* Initialize Application Engine */
     function initApplicationEngine() {
       renderCatalogItems(localCelestialCatalog);
       setupDragAndDrop();
@@ -954,5 +1060,3 @@
   </script>
 </body>
 </html>
-
-
