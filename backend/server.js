@@ -1,183 +1,126 @@
-const express = require('express');
-const { Pool } = require('pg');
-const bcrypt = require('bcryptjs');
-const cors = require('cors');
-require('dotenv').config();~
+const express = require("express");
+const path = require("path");
+const cors = require("cors");
+const bcrypt = require("bcrypt");
+require("dotenv").config();
+
+const pool = require("./config/db");
+const solverRoutes = require("./routes/solverRoutes");
 
 const app = express();
+const PORT = process.env.PORT || 5000;
 
-// Middleware
+app.use(cors());
 app.use(express.json());
-app.use(cors({
-  origin: '*', // Allows requests from index.html during development
-  methods: ['GET', 'POST', 'PUT', 'DELETE']
-}));
+app.use(express.urlencoded({ extended: true }));
 
-// PostgreSQL Connection Pool
-const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: process.env.DB_PORT,
-});
-// Test Database Connection on Launch
-pool.connect((err, client, release) => {
-  if (err) {
-    return console.error('Error connecting to PostgreSQL:', err.stack);
-  }
-  console.log('Successfully connected to PostgreSQL database:', process.env.DB_NAME);
-  release();
-});
+// Static assets
+app.use(express.static(path.join(__dirname, "../frontend")));
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
-// ==========================================
-// 1. REGISTER USER ENDPOINTn
-// ==========================================
-app.post('/api/register', async (req, res) => {
+// Authentication: Register with validation rules
+app.post("/api/auth/register", async (req, res) => {
   const { username, email, password } = req.body;
 
   if (!username || !email || !password) {
-    return res.status(400).json({ error: 'All fields (username, email, password) are required.' });
+    return res.status(400).json({ error: "All fields are required." });
+  }
+
+  // 1. Username rule: No underscores allowed
+  if (username.includes('_')) {
+    return res.status(400).json({ error: "Usernames cannot contain underscores (_)." });
+  }
+
+  // 2. Password rules: > 5 chars, 1 capital letter, 1 special character
+  if (password.length <= 5) {
+    return res.status(400).json({ error: "Password must be more than 5 characters long." });
+  }
+  if (!/[A-Z]/.test(password)) {
+    return res.status(400).json({ error: "Password must contain at least one capital letter." });
+  }
+  if (!/[^A-Za-z0-9]/.test(password)) {
+    return res.status(400).json({ error: "Password must contain at least one unique/special character." });
   }
 
   try {
-    // Hash password with bcrypt
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash(password, salt);
 
     const newUser = await pool.query(
-      `INSERT INTO users (username, email, password) 
-       VALUES ($1, $2, $3) 
-       RETURNING userid, username, email`,
-      [username, email, hashedPassword]
+      `INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email, is_admin`,
+      [username, email, password_hash]
     );
 
     res.status(201).json({
-      message: 'Account created successfully!',
+      token: "mock-jwt-token-" + Date.now(),
       user: newUser.rows[0]
     });
   } catch (err) {
-    console.error('Registration Error:', err.message);
-    if (err.code === '23505') { // Unique constraint violation in Postgres
-      return res.status(400).json({ error: 'Username or Email already exists.' });
-    }
-    res.status(500).json({ error: 'Database error during registration.' });
+    res.status(500).json({ error: "User already exists or database error: " + err.message });
   }
 });
 
-// ==========================================
-// 2. LOGIN USER ENDPOINT
-// ==========================================
-app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
+// Authentication: Login
+app.post("/api/auth/login", async (req, res) => {
+  const { email, password } = req.body;
 
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Please enter both username and password.' });
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email and password are required." });
   }
 
   try {
-    // Search user by username
-    const userResult = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-
-    if (userResult.rows.length === 0) {
-      return res.status(401).json({ error: 'Invalid username or password.' });
+    const result = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: "Invalid email or password." });
     }
 
-    const user = userResult.rows[0];
-
-    // Compare hashed password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Invalid username or password.' });
+    const user = result.rows[0];
+    const validPassword = await bcrypt.compare(password, user.password_hash);
+    if (!validPassword) {
+      return res.status(401).json({ error: "Invalid email or password." });
     }
 
-    // Success - return user session payload
     res.json({
-      userid: user.userid,
-      username: user.username,
-      email: user.email,
-      message: 'Authentication successful'
+      token: "mock-jwt-token-" + Date.now(),
+      user: { id: user.id, username: user.username, email: user.email, is_admin: user.is_admin }
     });
   } catch (err) {
-    console.error('Login Error:', err.message);
-    res.status(500).json({ error: 'Server authentication failed.' });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// ==========================================
-// 3. FETCH CELESTIAL CATALOG ENDPOINT
-// ==========================================
-app.get('/api/celestial-log', async (req, res) => {
+// Admin Route: View All Users
+app.get("/api/admin/users", async (req, res) => {
   try {
-    const catalogData = await pool.query(
-      `SELECT 
-        objectid AS id, 
-        catalog_id AS identifier, 
-        common_name, 
-        objecttype AS type,
-        ra,
-        dec
-       FROM celestial_log 
-       ORDER BY catalog_id ASC`
-    );
-    res.json(catalogData.rows);
+    const result = await pool.query("SELECT id, username, email, is_admin, created_at FROM users ORDER BY created_at DESC");
+    res.json(result.rows);
   } catch (err) {
-    console.error('Catalog Fetch Error:', err.message);
-    res.status(500).json({ error: 'Failed to retrieve celestial log.' });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// ==========================================
-// 4. SAVE UPLOADED ASTROPHOTOGRAPHY & CLASSIFICATION
-// ==========================================
-app.post('/api/photos/upload', async (req, res) => {
-  const { userId, storageUrl, objectId } = req.body;
+// Plate Solver API Routes
+app.use("/api/solver", solverRoutes);
 
-  if (!userId || !storageUrl) {
-    return res.status(400).json({ error: 'User ID and photo URL are required.' });
-  }
-
-  const client = await pool.connect();
-
+// Catalog Search Endpoint
+app.get("/api/astro/catalog/search", async (req, res) => {
+  const query = (req.query.query || "").trim();
   try {
-    await client.query('BEGIN'); // Start transaction
-
-    // 1. Insert into userphotos
-    const photoResult = await client.query(
-      `INSERT INTO userphotos (userid, strorage_url, uploadedat) 
-       VALUES ($1, $2, NOW()) 
-       RETURNING photoid`,
-      [userId, storageUrl]
+    const result = await pool.query(
+      `SELECT catalog_id, object_name, ra, dec, type FROM celestial_objects WHERE LOWER(object_name) LIKE LOWER($1) OR LOWER(catalog_id) LIKE LOWER($1)`,
+      [`%${query}%`]
     );
-
-    const newPhotoId = photoResult.rows[0].photoid;
-
-    // 2. Insert into photoclassifications if matched objectId exists
-    if (objectId) {
-      await client.query(
-        `INSERT INTO photoclassifications (photoid, objectid) 
-         VALUES ($1, $2)`,
-        [newPhotoId, objectId]
-      );
-    }
-
-    await client.query('COMMIT'); // Commit transaction
-
-    res.status(201).json({
-      message: 'Photo record and classification logged successfully.',
-      photoId: newPhotoId
-    });
+    res.json(result.rows);
   } catch (err) {
-    await client.query('ROLLBACK'); // Roll back on failure
-    console.error('Photo Save Error:', err.message);
-    res.status(500).json({ error: 'Transaction failed while saving photo data.' });
-  } finally {
-    client.release();
+    res.status(500).json({ error: err.message });
   }
 });
 
-// Start Server
-const PORT = process.env.PORT || 5000;
+// Fallback SPA Route
+app.get("/*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../frontend/index.html"));
+});
+
 app.listen(PORT, () => {
-  console.log(`🚀 Astromaps Server running on http://localhost:${PORT}`);
+  console.log(`[ASTROMAPS] Server & Auth Portal live on http://localhost:${PORT}`);
 });
