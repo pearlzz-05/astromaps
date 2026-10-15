@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Astromaps - Interactive Observatory Dashboard</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body class="h-full flex flex-col font-sans antialiased overflow-hidden">
+
+  <!-- Header / Navigation -->
+  <header class="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between relative z-20">
+    <div class="flex items-center space-x-3">
+      <span class="text-2xl">🌌</span>
+      <h1 class="text-xl font-bold tracking-wide bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+        Astromaps Portal
+      </h1>
+    </div>
+
+    <!-- Auth Controls -->
+    <div>
+      <button id="openAuthBtn" type="button" onclick="openAuthModal('login')" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition cursor-pointer">
+        Sign In / Register
+      </button>
+
+      <div id="userInfo" class="hidden flex items-center space-x-3">
+        <span id="userGreeting" class="text-xs text-indigo-300 font-medium"></span>
+        <button id="logoutBtn" type="button" onclick="handleLogout()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-3 py-1.5 rounded transition cursor-pointer">
+          Sign Out
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main View Grid -->
+  <div class="flex-1 flex overflow-hidden relative">
+
+    <!-- Left Control Panel -->
+    <aside class="w-80 bg-slate-900 border-r border-slate-800 flex flex-col p-4 space-y-4 z-10">
+      
+      <!-- Tab Bar Navigation -->
+      <div class="flex border-b border-slate-800 pb-2 space-x-4">
+        <button id="tabSearch" type="button" onclick="switchTab('search')" class="text-xs font-semibold text-indigo-400 border-b-2 border-indigo-500 pb-1 cursor-pointer">
+          Catalog Search
+        </button>
+        <button id="tabSaved" type="button" onclick="switchTab('saved')" class="text-xs font-semibold text-slate-400 hover:text-slate-200 border-b-2 border-transparent pb-1 cursor-pointer">
+          Saved Targets
+        </button>
+        <!-- Protected Tab: Hidden until authenticated -->
+        <button id="tabSolve" type="button" onclick="switchTab('solve')" class="hidden text-xs font-semibold text-slate-400 hover:text-slate-200 border-b-2 border-transparent pb-1 cursor-pointer">
+          Solve Image
+        </button>
+      </div>
+
+      <!-- Panel 1: Catalog Search -->
+      <div id="panelSearch" class="flex-1 flex flex-col space-y-3">
+        <div class="flex space-x-2">
+          <input id="searchInput" type="text" placeholder="Search M42, Orion, M31..." class="w-full bg-slate-800 border border-slate-700 rounded text-xs px-3 py-2 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+          <button id="searchBtn" type="button" onclick="performSearch()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-2 rounded font-semibold transition cursor-pointer">
+            Search
+          </button>
+        </div>
+        <div id="searchResults" class="flex-1 overflow-y-auto space-y-2 pr-1 text-xs">
+          <p class="text-slate-500 italic text-xs">Search for celestial targets to display coordinates...</p>
+        </div>
+      </div>
+
+      <!-- Panel 2: Saved Targets -->
+      <div id="panelSaved" class="hidden flex-1 overflow-y-auto space-y-2">
+        <p class="text-xs text-slate-400">Your bookmarked celestial locations will appear here.</p>
+      </div>
+
+      <!-- Panel 3: Plate Solver (Protected) -->
+      <div id="panelSolve" class="hidden flex-1 flex flex-col space-y-3">
+        <form id="solveForm" class="space-y-3">
+          <label class="block text-xs font-medium text-slate-300">Upload Astrophotography Image:</label>
+          <input type="file" id="imageFile" accept="image/*" class="w-full text-xs text-slate-400 bg-slate-800 border border-slate-700 rounded p-2 focus:outline-none cursor-pointer">
+          <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-2 rounded transition cursor-pointer">
+            Run Plate Solver
+          </button>
+        </form>
+
+        <div id="solveStatus" class="hidden text-xs text-indigo-400 animate-pulse font-mono"></div>
+        <div id="solveResult" class="hidden bg-slate-800 border border-slate-700 rounded p-3 text-xs space-y-1"></div>
+      </div>
+    </aside>
+
+    <!-- Celestial Map Viewport -->
+    <main class="flex-1 relative bg-slate-950">
+      <div id="map" class="w-full h-full"></div>
+    </main>
+
+  </div>
+
+  <!-- Authentication Modal with Direct Global Functions -->
+  <div id="authModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-slate-900 border border-slate-800 w-96 rounded-xl p-6 shadow-2xl relative">
+      <button id="closeAuthBtn" type="button" onclick="closeAuthModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer">✕</button>
+
+      <!-- Auth Toggle Tabs -->
+      <div class="flex border-b border-slate-800 mb-4 space-x-4">
+        <button id="modeLoginBtn" type="button" onclick="setAuthMode('login')" class="text-sm font-semibold text-indigo-400 border-b-2 border-indigo-500 pb-1 cursor-pointer">
+          Sign In
+        </button>
+        <button id="modeRegisterBtn" type="button" onclick="setAuthMode('register')" class="text-sm font-semibold text-slate-400 hover:text-slate-200 border-b-2 border-transparent pb-1 cursor-pointer">
+          Register
+        </button>
+      </div>
+
+      <form id="authForm" class="space-y-4">
+        <!-- Username Field -->
+        <div id="usernameGroup" class="hidden">
+          <label class="block text-xs text-slate-400 mb-1">Username</label>
+          <input id="authUsername" type="text" placeholder="astro_user" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Email Address</label>
+          <input id="authEmail" type="email" required placeholder="user@example.com" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Password</label>
+          <input id="authPassword" type="password" required placeholder="••••••••" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div id="authError" class="hidden text-xs text-rose-400"></div>
+
+        <button id="authSubmitBtn" type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-2.5 rounded transition cursor-pointer">
+          Sign In
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
